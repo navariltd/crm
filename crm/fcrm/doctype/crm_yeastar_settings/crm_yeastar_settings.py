@@ -6,6 +6,7 @@ from frappe.model.document import Document
 import requests
 import json
 from frappe import _
+from crm.integrations.yeastar.yeaster_utils import handle_error, headers
 
 
 class CRMYeastarSettings(Document):
@@ -33,7 +34,6 @@ class CRMYeastarSettings(Document):
 
         payload = {"username": self.username, "password": self.password}
         url = f"{self.request_url}/get_token"
-        headers = {"Content-Type": "application/json", "User-Agent": "OpenAPI"}
 
         if self.enabled:
             try:
@@ -41,17 +41,13 @@ class CRMYeastarSettings(Document):
                 response = requests.post(
                     url,
                     data=json.dumps(payload),
-                    headers=headers,
+                    headers=headers(),
                 )
 
                 response = response.json()
 
                 if response.get("errcode") != 0:
-                    frappe.log_error(
-                        frappe.get_traceback(),
-                        f"Yeastar CRM: Access Token Fetch Error {response}",
-                    )
-                    frappe.throw(_("An error occured while fetching access token."))
+                    handle_error(f"Error fetching access token: {response}")
 
                 self.access_token = response.get("access_token")
                 self.refresh_token = response.get("refresh_token")
