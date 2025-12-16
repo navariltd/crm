@@ -5,6 +5,81 @@ from dataclasses import dataclass
 from crm.integrations.yeastar.yeaster_utils import handle_error, headers
 
 
+@frappe.whitelist(allow_guest=True)
+def handle_incoming_call():
+    data: dict[str, any] = frappe.request.get_json()
+    if not data:
+        frappe.log_error(
+            "No data received in the incoming call webhook.",
+            "Yeastar Incoming Call Error",
+        )
+        frappe.throw(_("No data received in the request."))
+
+    members: list[dict[str, str]] = data.get("members", [])
+    if not members or not isinstance(members, list):
+        frappe.log_error(
+            "Invalid or missing 'members' data in the incoming call webhook.",
+            "Yeastar Incoming Call Error",
+        )
+        frappe.throw(_("Invalid data received in the request."))
+
+    handle_request(members[0].get("inbound"))
+
+
+def handle_request(member: dict[str, str]):
+
+    payload = frappe._dict(
+        {
+            "channel_id": member.get("channel_id"),
+            "from": member.get("from"),
+            "to": member.get("to"),
+        }
+    )
+
+    try:
+        frappe.publish_realtime(
+            "yeaster_incoming_call",
+            message=payload,
+            user=frappe.session.user,
+        )
+    except Exception as e:
+        handle_error(
+            _("Error publishing incoming call event: ") + str(e),
+            "Yeastar Incoming Call Error",
+        )
+
+
+@frappe.whitelist()
+def respond_to_call(channel_id: str, action: str) -> dict[str, str | int]:
+
+    request_url = "/call/{}_inbound?access_token={}".format(
+        action,
+        get_yeastar_settings().access_token,
+    )
+    url = url_generator(request_url)
+
+    payload = {"channel_id": channel_id}
+
+    try:
+        response = requests.post(
+            url=url,
+            json=payload,
+            headers=headers(),
+        )
+
+        response.raise_for_status()
+
+        response = response.json()
+
+        return response
+    except Exception as e:
+        frappe.log_error(
+            frappe.get_traceback(),
+            f"{str(e)}",
+        )
+        frappe.throw(_("An error occurred while responding to the call."))
+
+
 @dataclass
 class CallPayload:
     caller: str | int
