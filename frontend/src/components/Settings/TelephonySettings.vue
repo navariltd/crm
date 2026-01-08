@@ -69,6 +69,19 @@
           doctype="CRM Exotel Settings"
         />
       </div>
+
+      <!-- Yeastar -->
+      <div v-if="isManager()" class="flex flex-col justify-between gap-4">
+        <span class="text-base font-semibold text-ink-gray-8">
+          {{ __('Yeastar') }}
+        </span>
+        <FieldLayout
+          v-if="yeastar?.doc && yeastarTabs"
+          :tabs="yeastarTabs"
+          :data="yeastar.doc"
+          doctype="CRM Yeastar Settings"
+        />
+      </div>
     </div>
     <div v-else class="flex flex-1 items-center justify-center">
       <Spinner class="size-8" />
@@ -94,6 +107,16 @@ import { getRandom } from '@/utils'
 import { ref, computed, watch } from 'vue'
 
 const { isManager, isTelephonyAgent } = usersStore()
+
+const yeastarFields = createResource({
+  url: 'crm.api.doc.get_fields',
+  cache: ['fields', 'CRM Yeastar Settings'],
+  params: {
+    doctype: 'CRM Yeastar Settings',
+    allow_all_fieldtypes: true,
+  },
+  auto: true,
+})
 
 const twilioFields = createResource({
   url: 'crm.api.doc.get_fields',
@@ -143,6 +166,73 @@ const exotel = createDocumentResource({
       toast.error(err.message + ': ' + err.messages[0])
     },
   },
+})
+
+const yeastar = createDocumentResource({
+  doctype: 'CRM Yeastar Settings',
+  name: 'CRM Yeastar Settings',
+  fields: ['*'],
+  auto: true,
+  setValue: {
+    onSuccess: () => {
+      toast.success(__('Yeastar settings updated successfully'))
+    },
+    onError: (err) => {
+      toast.error(err.message + ': ' + err.messages[0])
+    },
+  },
+})
+
+const yeastarTabs = computed(() => {
+  if (!yeastarFields.data) return []
+  let _tabs = []
+  let fieldsData = yeastarFields.data
+
+  if (fieldsData[0].type != 'Tab Break') {
+    let _sections = []
+    if (fieldsData[0].type != 'Section Break') {
+      _sections.push({
+        name: 'first_section',
+        columns: [{ name: 'first_column', fields: [] }],
+      })
+    }
+    _tabs.push({ name: 'first_tab', sections: _sections })
+  }
+
+  fieldsData.forEach((field) => {
+    let last_tab = _tabs[_tabs.length - 1]
+    let _sections = _tabs.length ? last_tab.sections : []
+    if (field.fieldtype === 'Tab Break') {
+      _tabs.push({
+        label: field.label,
+        name: field.fieldname,
+        sections: [
+          {
+            name: 'section_' + getRandom(),
+            columns: [{ name: 'column_' + getRandom(), fields: [] }],
+          },
+        ],
+      })
+    } else if (field.fieldtype === 'Section Break') {
+      _sections.push({
+        label: field.label,
+        name: field.fieldname,
+        hideBorder: field.hide_border,
+        columns: [{ name: 'column_' + getRandom(), fields: [] }],
+      })
+    } else if (field.fieldtype === 'Column Break') {
+      _sections[_sections.length - 1].columns.push({
+        name: field.fieldname,
+        fields: [],
+      })
+    } else {
+      let last_section = _sections[_sections.length - 1]
+      let last_column = last_section.columns[last_section.columns.length - 1]
+      last_column.fields.push(field)
+    }
+  })
+
+  return _tabs
 })
 
 const twilioTabs = computed(() => {
