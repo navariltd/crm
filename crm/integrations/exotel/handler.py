@@ -1,4 +1,3 @@
-import bleach
 import frappe
 import requests
 from frappe import _
@@ -111,7 +110,7 @@ def make_a_call(to_number, from_number=None, caller_id=None):
 		response.raise_for_status()
 	except requests.exceptions.HTTPError:
 		if exc := response.json().get("RestException"):
-			frappe.throw(bleach.linkify(exc.get("Message")), title=_("Exotel Exception"))
+			frappe.throw(exc.get("Message"), title=_("Exotel Exception"))
 	else:
 		res = response.json()
 		call_payload = res.get("Call", {})
@@ -184,6 +183,7 @@ def create_call_log(
 	agent,
 	status="Ringing",
 	call_type="Incoming",
+	telephony_medium="Exotel",
 ):
 	call_log = frappe.new_doc("CRM Call Log")
 	call_log.id = call_id
@@ -191,7 +191,7 @@ def create_call_log(
 	call_log.medium = medium
 	call_log.type = call_type
 	call_log.status = status
-	call_log.telephony_medium = "Exotel"
+	call_log.telephony_medium = telephony_medium
 	setattr(call_log, "from", from_number)
 
 	if call_type == "Incoming":
